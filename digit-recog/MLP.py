@@ -72,18 +72,26 @@ class MLP:
         for epoch in range(epochs):
             logging.info("Epoch {}: Started".format(epoch+1))
             err = 0
+            accuracy = 0
             for train_num in range(train_length):
-                err += ( np.sum(self.feedforward(train_dataset[train_num]) - 
-                    train_labels[train_num]) ) ** 2
+                forwardoutput = self.feedforward(train_dataset[train_num])
+                err+=(np.sum(forwardoutput - train_labels[train_num])) ** 2
+
                 delta_w, delta_b = self.backpropagation(train_dataset[train_num], 
                     train_labels[train_num])
                 self.weights =  [w-alpha*nw for w, nw in zip(self.weights, delta_w)]
                 self.biases = [b-alpha*nb for b, nb in zip(self.biases, delta_b)]
 
+                if np.argmax(forwardoutput) == np.argmax(train_labels[train_num]):
+                    accuracy+=1
+
                 if(train_num % 1000 == 0 and train_num > 0):
-                    logging.debug("Epoch {} - Training Num: {} - RMSE: {}"
-                        .format(epoch+1,train_num,err/(train_num+1)))
-            logging.info("Epoch {}] Finished. RMSE: {}".format(epoch+1,err/train_length))
+                    logging.debug("Epoch {} - Training Num: {} - Accuracy: {} - RMSE: {}"
+                        .format(epoch+1,train_num,accuracy/(train_num+1),err/(train_num+1)))
+
+
+            logging.info("Epoch {}] Finished.  Accuracy: {} - RMSE: {} "
+                .format(epoch+1,accuracy/train_length,err/train_length))
 
     def predict(self, in_):
         return np.argmax(self.feedforward(in_))
