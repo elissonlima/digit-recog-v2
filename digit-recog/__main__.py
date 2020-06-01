@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import logging
+from MLP import MLP
 
 logging.basicConfig(level=logging.DEBUG, 
             format='%(asctime)s - %(message)s', 
@@ -23,12 +24,16 @@ def load_train_dataset_from_csv():
     train_labels = np.array([])
     with open(TRAIN_DATASET_CSV_PATH) as csv_train:
         next(csv_train)
+        qtd_lines=0
         for line in csv_train:
+            label_array = np.zeros(10)
             arr_line = np.array(line.strip().split(",")).astype(np.uint8)
             train_dataset = np.append(train_dataset, arr_line[1:])
-            train_labels = np.append(train_labels, arr_line[0])
-        return (train_dataset.reshape((train_labels.shape[0],
-                28,28)), train_labels)
+            label_array[arr_line[0]] = 1
+            train_labels = np.append(train_labels, label_array)
+            qtd_lines+=1
+        return (train_dataset.reshape((qtd_lines, 784, 1)), 
+                train_labels.reshape(qtd_lines, 10, 1))
 
 def load_test_dataset_from_csv():
     test_dataset = np.array([])
@@ -39,7 +44,7 @@ def load_test_dataset_from_csv():
             arr_line = np.array(line.strip().split(",")).astype(np.uint8)
             test_dataset = np.append(test_dataset, arr_line)
             qtd_lines+=1
-        return test_dataset.reshape((qtd_lines,28,28))
+        return test_dataset.reshape((qtd_lines, 784, 1))
 
 def get_datasets():
     train_dataset = np.array([])
@@ -56,9 +61,11 @@ def get_datasets():
         logging.info("DONE")
         np.save(TRAIN_DATASET_NPY_PATH, train_dataset)
         np.save(TRAIN_LABEL_NPY_PATH, train_labels)
-        logging.info("Saving train datasets at {}".format(os.path.dirname(TRAIN_DATASET_NPY_PATH)))
+        logging.info("Saving train datasets at {}"
+            .format(os.path.dirname(TRAIN_DATASET_NPY_PATH)))
     else:
-        logging.info("Loading from serialized files at {}".format(os.path.dirname(TRAIN_DATASET_NPY_PATH)))
+        logging.info("Loading from serialized files at {}"
+            .format(os.path.dirname(TRAIN_DATASET_NPY_PATH)))
         train_dataset = np.load(TRAIN_DATASET_NPY_PATH)
         train_labels = np.load(TRAIN_LABEL_NPY_PATH)
     
@@ -69,9 +76,11 @@ def get_datasets():
         test_dataset = load_test_dataset_from_csv()
         logging.info("DONE")
         np.save(TEST_DATASET_NPY_PATH, test_dataset)
-        logging.info("Saving test dataset at {}".format(os.path.dirname(TEST_DATASET_NPY_PATH)))
+        logging.info("Saving test dataset at {}"
+            .format(os.path.dirname(TEST_DATASET_NPY_PATH)))
     else:
-        logging.info("Loading from serialized files at {}".format(os.path.dirname(TRAIN_DATASET_NPY_PATH)))
+        logging.info("Loading from serialized files at {}"
+            .format(os.path.dirname(TRAIN_DATASET_NPY_PATH)))
         test_dataset = np.load(TEST_DATASET_NPY_PATH)
 
     return train_dataset, train_labels, test_dataset
@@ -80,3 +89,8 @@ def get_datasets():
 if __name__ == "__main__":
     logging.info("STARTING digit-recog model")
     train_dataset, train_labels, test_dataset = get_datasets()
+
+    mlp = MLP([784,50,10])
+    mlp.SGD(train_dataset, train_labels, 10)
+
+    
