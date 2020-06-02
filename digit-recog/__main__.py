@@ -1,7 +1,9 @@
 import numpy as np
 import os
 import logging
-from MLP import MLP
+from mlp import MLP
+from keras_mlp import MLPKeras
+from network import Network
 
 logging.basicConfig(level=logging.DEBUG, 
             format='%(asctime)s - %(message)s', 
@@ -89,8 +91,12 @@ def get_datasets():
 if __name__ == "__main__":
     logging.info("STARTING digit-recog model")
     train_dataset, train_labels, test_dataset = get_datasets()
+    train = [(x,y) for x,y in zip(train_dataset, train_labels)]
 
-    mlp = MLP([784,50,10])
-    mlp.SGD(train_dataset, train_labels, 10)
+    mlp = MLP([784, 30, 10], random_state=10)
+    mlp.SGD(train_dataset, train_labels, 30, 
+        alpha=3.,batch_size=10)
 
+    # net = Network([784, 30, 10], random_state=10)
+    # net.SGD(train, 30, 10, 3.0, test_data=train)
     

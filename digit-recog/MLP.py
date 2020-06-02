@@ -11,12 +11,11 @@ def sigmoid(x):
 
 def sigmoid_prime(z):
     """Derivative of the sigmoid function."""
-    y = sigmoid(z)
-    return y*(1-y)
+    return sigmoid(z)*(1-sigmoid(z))
 
 class MLP:
 
-    def __init__(self, layer_spec=[784,250,10], random_state=4):
+    def __init__(self, layer_spec=[784,250,10], random_state=0):
         self.num_layers = len(layer_spec)
         self.layer_spec = layer_spec
         np.random.seed(random_state)
@@ -66,32 +65,44 @@ class MLP:
     def cost_function(self, a, y):
         return a - y
 
-    def SGD(self, train_dataset, train_labels, epochs, alpha=0.1):
+    def SGD(self, train_dataset, train_labels, epochs, alpha=0.01,
+            batch_size=10):
         train_length = len(train_dataset)
 
         for epoch in range(epochs):
             logging.info("Epoch {}: Started".format(epoch+1))
-            err = 0
-            accuracy = 0
-            for train_num in range(train_length):
-                forwardoutput = self.feedforward(train_dataset[train_num])
-                err+=(np.sum(forwardoutput - train_labels[train_num])) ** 2
+            train_idx = [i for i in range(train_length)]
+            np.random.shuffle(train_idx)
 
-                delta_w, delta_b = self.backpropagation(train_dataset[train_num], 
-                    train_labels[train_num])
-                self.weights =  [w-alpha*nw for w, nw in zip(self.weights, delta_w)]
-                self.biases = [b-alpha*nb for b, nb in zip(self.biases, delta_b)]
+            batches = [
+                (train_dataset[train_idx[k:k+batch_size]],
+                train_labels[train_idx[k:k+batch_size]])
+                for k in range(0, train_length, batch_size)]
 
-                if np.argmax(forwardoutput) == np.argmax(train_labels[train_num]):
-                    accuracy+=1
+            for batch_x, batch_y in batches:
 
-                if(train_num % 1000 == 0 and train_num > 0):
-                    logging.debug("Epoch {} - Training Num: {} - Accuracy: {} - RMSE: {}"
-                        .format(epoch+1,train_num,accuracy/(train_num+1),err/(train_num+1)))
+                nabla_b = [np.zeros(b.shape) for b in self.biases]
+                nabla_w = [np.zeros(w.shape) for w in self.weights]
 
+                for x, y in zip(batch_x,batch_y):
+                    delta_w, delta_b = self.backpropagation(x,y)
+                    nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_b)]
+                    nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_w)]
 
-            logging.info("Epoch {}] Finished.  Accuracy: {} - RMSE: {} "
-                .format(epoch+1,accuracy/train_length,err/train_length))
+                self.weights =  [w-((alpha/len(batch_x))*nw)
+                        for w, nw in zip(self.weights, nabla_w)]
+                self.biases = [b-((alpha/len(batch_x))*nb) 
+                        for b, nb in zip(self.biases, nabla_b)]
+
+            logging.info("Epoch {} Finished. Accuracy: {}"
+                .format(epoch+1,self.evaluate(train_dataset, 
+                        train_labels)))
+
+    def evaluate(self, dataset, labels):
+        test_results = [(np.argmax(self.feedforward(x)), 
+                         np.argmax(y))
+                        for x, y in zip(dataset, labels)]
+        return sum(int(x == y) for x, y in test_results) / len(dataset)
 
     def predict(self, in_):
         return np.argmax(self.feedforward(in_))
