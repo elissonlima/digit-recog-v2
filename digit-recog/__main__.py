@@ -97,6 +97,13 @@ if __name__ == "__main__":
     # mlp = MLP([784, 30, 10])
     # mlp.SGD(train, 30, alpha=0.1, batch_size=10)
 
-    cnn_model = CNN(None)
+    cnn_model = CNN(
+        [('conv', 5, 6, 2, 1, "sigmoid"),
+        ('pool', 'average', 2, 2),
+        ('conv', 5, 16, 0, 1, "sigmoid"),
+        ('pool', 'average', 2, 2)]
+        , (28,28,1)
+    )
+
     in_ = train_dataset[:10].reshape((10,28,28,1))
-    #cnn_model.feedforward(in_)
+    cnn_model.feedforward(in_)

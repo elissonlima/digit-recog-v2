@@ -1,9 +1,15 @@
 import numpy as np
 
+def sigmoid(x):
+    return 1.0/(1.0 + np.exp(-x))
+
+def sigmoid_prime(z):
+    """Derivative of the sigmoid function."""
+    return sigmoid(z)*(1-sigmoid(z))
 
 class CNN(object):
 
-    def __init__(self,layer_spec):
+    def __init__(self,layer_spec, input_size):
         """
         Create CNN Class
 
@@ -12,14 +18,75 @@ class CNN(object):
             ('conv',filter_size, num_filter, pad, stride, activation_function) or
             ('pool', mode, size, stride )
         """
-        pass
+        self.layers = []
+        for i in range(len(layer_spec)):
+            l_spec = {"type":layer_spec[i][0]}
+
+            if i > 0:
+                input_size = self.layers[i - 1]["out_size"]
+            
+            if l_spec["type"] == 'conv':
+                l_spec["W"] = np.random.randn(
+                       layer_spec[i][1], #Filter size
+                       layer_spec[i][1], #Filter size
+                       input_size[-1],
+                       layer_spec[i][2]) #Filter Num
+                l_spec["b"] = np.random.randn(1,1,1,
+                        layer_spec[i][2])
+                l_spec["activation"] = np.vectorize(
+                        globals()[layer_spec[i][5]])
+                l_spec["activation_prime"] = np.vectorize(
+                    globals()[layer_spec[i][5]+"_prime"] )
+                l_spec["hparameters"] = {
+                    "stride" : layer_spec[i][4],
+                    "pad" : layer_spec[i][3]
+                }
+                H_prev = input_size[0] #Prev Out Height
+                W_prev = input_size[1] #Prev Out Widht
+                n_C = layer_spec[i][2] #Filter Number
+                
+                n_H = int((H_prev - layer_spec[i][1] + 2 * 
+                    layer_spec[i][3]) / layer_spec[i][4]) + 1
+                n_W = int((W_prev - layer_spec[i][1] + 2 * 
+                    layer_spec[i][3]) / layer_spec[i][4]) + 1
+
+                l_spec["out_size"] = (n_H, n_W, n_C)
+                self.layers.append(l_spec)
+            elif l_spec["type"] == 'pool':
+                l_spec["mode"] = layer_spec[i][1]
+                l_spec["hparameters"] = {
+                    "f" : layer_spec[i][2], #Filter Size
+                    "stride" : layer_spec[i][3]
+                }
+
+                H_prev = input_size[0] #Prev Out Height
+                W_prev = input_size[1] #Prev Out Widht
+                n_C = input_size[2] #Prev Out Depth
+                
+                n_H = int(1 + (H_prev - layer_spec[i][2]) / \
+                        layer_spec[i][3])
+                n_W = int(1 + (W_prev - layer_spec[i][2]) / \
+                        layer_spec[i][3])
+
+                l_spec["out_size"] = (n_H, n_W, n_C)
+                self.layers.append(l_spec)
+
+
 
     def feedforward(self, in_):
-        W = np.random.randn(3,3,1,16)
-        b = np.random.randn(1,1,1,16)
-        hparameters = { "pad": 0, "stride": 1}
-        res = self.conv_forward(in_, W, b, hparameters)
-        print(res[0].shape)
+        for layer in self.layers:
+            if layer["type"] == 'conv':
+                W = layer["W"]
+                b = layer["b"]
+                hparam = layer["hparameters"]
+                in_ = self.conv_forward(in_,W,b,hparam)[0]
+            elif layer["type"] == 'pool':
+                in_ = self.pool_forward(in_, 
+                    layer["hparameters"], mode=layer["mode"])[0]
+            
+            
+            print(in_.shape)
+
 
     def zero_pad(self,X, pad):
         """
