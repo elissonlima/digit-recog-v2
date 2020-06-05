@@ -1,4 +1,5 @@
 import numpy as np
+from mlp import MLP
 
 def sigmoid(x):
     return 1.0/(1.0 + np.exp(-x))
@@ -16,15 +17,17 @@ class CNN(object):
         Argument: 
         layer_spec -- python list  of tuples with CNN arch specs 
             ('conv',filter_size, num_filter, pad, stride, activation_function) or
-            ('pool', mode, size, stride )
+            ('pool', mode, size, stride ) or
+            ('fully-conected', out_size, activation_function)
         """
+        np.random.seed(1)
         self.layers = []
         for i in range(len(layer_spec)):
             l_spec = {"type":layer_spec[i][0]}
 
             if i > 0:
                 input_size = self.layers[i - 1]["out_size"]
-            
+
             if l_spec["type"] == 'conv':
                 l_spec["W"] = np.random.randn(
                        layer_spec[i][1], #Filter size
@@ -70,6 +73,18 @@ class CNN(object):
 
                 l_spec["out_size"] = (n_H, n_W, n_C)
                 self.layers.append(l_spec)
+            elif l_spec["type"] == 'fully-conected':
+                l_spec["input_size"] = np.prod(
+                    self.layers[i - 1]["out_size"])
+                l_spec["out_size"] = layer_spec[i][1]
+                l_spec["activation"] = np.vectorize(
+                        globals()[layer_spec[i][2]])
+                l_spec["activation_prime"] = np.vectorize(
+                    globals()[layer_spec[i][2]+"_prime"] )
+                l_spec["W"] = np.random.randn(l_spec["out_size"],
+                             l_spec["input_size"])
+                l_spec["b"] = np.random.randn(l_spec["out_size"], 1)
+                self.layers.append(l_spec)
 
 
 
@@ -83,9 +98,25 @@ class CNN(object):
             elif layer["type"] == 'pool':
                 in_ = self.pool_forward(in_, 
                     layer["hparameters"], mode=layer["mode"])[0]
+            elif layer["type"] == 'fully-conected':
+
+                    if len(in_.shape) > 3: #Mean that prev layer was convolutional
+                        in_ = in_.reshape((in_.shape[0], 
+                                    np.prod(in_.shape[1:]),1))
+                    in_ = self.fully_connected_forward(
+                            in_, layer["W"],
+                            layer["b"], layer["activation"])
             
             
-            print(in_.shape)
+        print(np.argmax(in_[0]))
+
+    def fully_connected_forward(self, in_, W, b, act_func):
+        input_batch_size = in_.shape[0]
+        out_ = np.ones((input_batch_size, W.shape[0], 1))
+        for m in range(input_batch_size):
+            out_[m] = act_func(np.dot(W, in_[m]) + b)
+
+        return out_
 
 
     def zero_pad(self,X, pad):

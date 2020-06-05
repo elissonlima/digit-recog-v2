@@ -29,6 +29,7 @@ class MLP:
     def feedforward(self, in_):
         sigmoid_vect = np.vectorize(sigmoid)
         for b, w in zip(self.biases, self.weights):
+            print(w.shape, b.shape)
             in_ = sigmoid_vect(np.dot(w, in_) + b)
         return in_
 
