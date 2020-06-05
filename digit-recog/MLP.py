@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import random
 
 np.seterr( over='ignore' )
 
@@ -15,7 +16,7 @@ def sigmoid_prime(z):
 
 class MLP:
 
-    def __init__(self, layer_spec=[784,250,10], random_state=0):
+    def __init__(self, layer_spec, random_state=0):
         self.num_layers = len(layer_spec)
         self.layer_spec = layer_spec
         np.random.seed(random_state)
@@ -50,58 +51,45 @@ class MLP:
         delta_b = [np.zeros(b.shape) for b in self.biases]
         delta_w = [np.zeros(w.shape) for w in self.weights]
 
-        delta_b[-1] = self.cost_function(a[-1],out_) \
+        delta = self.cost_derivative(a[-1],out_) \
              * sigmoid_prime_vect(z[-1])
-        delta_w[-1] = np.dot(delta_b[-1], a[-2].T)
+        delta_b[-1] = delta
+        delta_w[-1] = np.dot(delta, a[-2].T)
 
         #Calc sensibility in all hidden layers
         for l in range(2, self.num_layers):
-            delta_b[-l] = ( np.dot(self.weights[-l+1].T, delta_b[-l+1])
-               * sigmoid_prime_vect(z[-l]) )
-            delta_w[-l] = np.dot(delta_b[-l], a[-l-1].T)
+            delta = np.dot(self.weights[-l+1].T, delta_b[-l+1]) \
+               * sigmoid_prime_vect(z[-l]) 
+            delta_b[-l] = delta
+            delta_w[-l] = np.dot(delta, a[-l-1].T)
             
         return (delta_w, delta_b)
 
-    def cost_function(self, a, y):
+    def cost_derivative(self, a, y):
         return a - y
 
-    def SGD(self, train_dataset, train_labels, epochs, alpha=0.01,
+    def SGD(self, train_dataset, epochs, alpha=0.01,
             batch_size=10):
-        train_length = len(train_dataset)
-
         for epoch in range(epochs):
             logging.info("Epoch {}: Started".format(epoch+1))
-            train_idx = [i for i in range(train_length)]
-            np.random.shuffle(train_idx)
+            random.shuffle(train_dataset)
 
-            batches = [
-                (train_dataset[train_idx[k:k+batch_size]],
-                train_labels[train_idx[k:k+batch_size]])
-                for k in range(0, train_length, batch_size)]
+            for x, y in train_dataset:
 
-            for batch_x, batch_y in batches:
+                delta_w, delta_b = self.backpropagation(x,y)
 
-                nabla_b = [np.zeros(b.shape) for b in self.biases]
-                nabla_w = [np.zeros(w.shape) for w in self.weights]
-
-                for x, y in zip(batch_x,batch_y):
-                    delta_w, delta_b = self.backpropagation(x,y)
-                    nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, delta_b)]
-                    nabla_w = [nw+dnw for nw, dnw in zip(nabla_w, delta_w)]
-
-                self.weights =  [w-((alpha/len(batch_x))*nw)
-                        for w, nw in zip(self.weights, nabla_w)]
-                self.biases = [b-((alpha/len(batch_x))*nb) 
-                        for b, nb in zip(self.biases, nabla_b)]
+                self.weights =  [w-(alpha*nw)
+                        for w, nw in zip(self.weights, delta_w)]
+                self.biases = [b-(alpha*nb)
+                        for b, nb in zip(self.biases, delta_b)]
 
             logging.info("Epoch {} Finished. Accuracy: {}"
-                .format(epoch+1,self.evaluate(train_dataset, 
-                        train_labels)))
+                .format(epoch+1,self.evaluate(train_dataset)))
 
-    def evaluate(self, dataset, labels):
+    def evaluate(self, dataset):
         test_results = [(np.argmax(self.feedforward(x)), 
                          np.argmax(y))
-                        for x, y in zip(dataset, labels)]
+                        for x, y in dataset]
         return sum(int(x == y) for x, y in test_results) / len(dataset)
 
     def predict(self, in_):

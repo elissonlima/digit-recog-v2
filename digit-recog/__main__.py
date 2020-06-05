@@ -1,9 +1,10 @@
 import numpy as np
 import os
 import logging
+from PIL import Image
 from mlp import MLP
-from keras_mlp import MLPKeras
-from network import Network
+from cnn import CNN
+#from keras_mlp import MLPKeras
 
 logging.basicConfig(level=logging.DEBUG, 
             format='%(asctime)s - %(message)s', 
@@ -93,10 +94,9 @@ if __name__ == "__main__":
     train_dataset, train_labels, test_dataset = get_datasets()
     train = [(x,y) for x,y in zip(train_dataset, train_labels)]
 
-    mlp = MLP([784, 30, 10], random_state=10)
-    mlp.SGD(train_dataset, train_labels, 30, 
-        alpha=3.,batch_size=10)
+    # mlp = MLP([784, 30, 10])
+    # mlp.SGD(train, 30, alpha=0.1, batch_size=10)
 
-    # net = Network([784, 30, 10], random_state=10)
-    # net.SGD(train, 30, 10, 3.0, test_data=train)
-    
+    cnn_model = CNN(None)
+    in_ = train_dataset[:10].reshape((10,28,28,1))
+    #cnn_model.feedforward(in_)
