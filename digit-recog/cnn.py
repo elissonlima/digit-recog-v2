@@ -18,7 +18,7 @@ class CNN(object):
         layer_spec -- python list  of tuples with CNN arch specs 
             ('conv',filter_size, num_filter, pad, stride, activation_function) or
             ('pool', mode, size, stride ) or
-            ('fully-conected', out_size, activation_function)
+            ('fully-connected', out_size, activation_function)
         """
         np.random.seed(1)
         self.layers = []
@@ -73,7 +73,7 @@ class CNN(object):
 
                 l_spec["out_size"] = (n_H, n_W, n_C)
                 self.layers.append(l_spec)
-            elif l_spec["type"] == 'fully-conected':
+            elif l_spec["type"] == 'fully-connected':
                 l_spec["input_size"] = np.prod(
                     self.layers[i - 1]["out_size"])
                 l_spec["out_size"] = layer_spec[i][1]
@@ -98,25 +98,139 @@ class CNN(object):
             elif layer["type"] == 'pool':
                 in_ = self.pool_forward(in_, 
                     layer["hparameters"], mode=layer["mode"])[0]
-            elif layer["type"] == 'fully-conected':
+            elif layer["type"] == 'fully-connected':
 
                     if len(in_.shape) > 3: #Mean that prev layer was convolutional
                         in_ = in_.reshape((in_.shape[0], 
                                     np.prod(in_.shape[1:]),1))
                     in_ = self.fully_connected_forward(
                             in_, layer["W"],
+                            layer["b"], layer["activation"])[0]
+            
+            
+        return in_
+
+    def backpropagation(self, in_, out_):
+        """
+            With the bless of God, this is the full backpropagation
+
+            Argument:
+            in_ -- Input
+            out_ -- Expected output
+        """
+        activations = [in_]
+        zs = []
+        caches = []
+
+        for layer in self.layers:
+            if layer["type"] == 'conv':
+                W = layer["W"]
+                b = layer["b"]
+                hparam = layer["hparameters"]
+                conv_f = self.conv_forward(in_,W,b,hparam)
+
+                Z = conv_f[0]
+                in_ = layer['activation'](Z)
+                zs.append(Z)
+                activations.append(in_)
+                caches.append(conv_f[1])
+            elif layer["type"] == 'pool':
+                pool_f = self.pool_forward(in_, 
+                    layer["hparameters"], mode=layer["mode"])
+                in_ = pool_f[0]
+                activations.append(in_)
+                zs.append([])
+                caches.append(pool_f[1])
+            elif layer["type"] == 'fully-connected':
+                    if len(in_.shape) > 3: #Mean that prev layer was convolutional
+                        in_ = in_.reshape((in_.shape[0], 
+                                    np.prod(in_.shape[1:]),1))
+                    f_conn = self.fully_connected_forward(
+                            in_, layer["W"],
                             layer["b"], layer["activation"])
-            
-            
-        print(np.argmax(in_[0]))
+                    in_ = f_conn[0]
+                    activations.append(in_)
+                    zs.append(f_conn[1])
+                    caches.append([])
+
+        nabla_b = [None for _ in range(len(self.layers))]
+        nabla_w = [None for _ in range(len(self.layers))]
+
+        for i in range(len(self.layers) - 1, -1, -1):
+            layer = self.layers[i]
+            if layer["type"] == "fully-connected":
+                if i == len(self.layers) - 1:
+                    delta_b, delta_w = (
+                        self.fully_connected_backward_first_layer(
+                            activations[-1], out_,
+                            zs[-1], activations[-2],
+                            layer["W"], layer["b"],
+                            layer["activation_prime"]
+                        ) )
+                    nabla_b[i] = delta_b
+                    nabla_w[i] = delta_w
+                else:
+                    act_prev = activations[i]
+                    if self.layers[i - 1]["type"] != "fully-connected":
+                        act_prev = act_prev.reshape((act_prev.shape[0], 
+                                    np.prod(act_prev.shape[1:]),1))
+                    delta_b, delta_w = (
+                        self.fully_connected_backward(
+                            self.layers[i + 1]["W"],
+                            nabla_b[i + 1], zs[i],
+                            act_prev,
+                            layer["b"].shape,
+                            layer["W"].shape,
+                            layer["activation_prime"])
+                        )
+                    nabla_b[i] = delta_b
+                    nabla_w[i] = delta_w
+
+        print(nabla_b[-1].shape, nabla_w[-1].shape)
+        print(nabla_b[-2].shape, nabla_w[-2].shape)
+        print(nabla_b[-3].shape, nabla_w[-3].shape)
+
+    def cost_derivative(self, a, y):
+        return a - y
+
+    def fully_connected_backward(self, w_next, delta_prev, z, a_prev,
+             b_shape, w_shape, activation_prime):
+        delta_b = np.zeros((a_prev.shape[0], ) + b_shape)
+        delta_w = np.zeros((a_prev.shape[0], ) + w_shape)
+
+        #a_prev.shape[0] is the batch size
+        for m in range(a_prev.shape[0]):
+            delta = np.dot(w_next.T, delta_prev[m]) \
+                * activation_prime(z[m])
+            delta_b[m] = delta
+            delta_w[m] = np.dot(delta, a_prev[m].T)
+    
+        return delta_b, delta_w
+
+    def fully_connected_backward_first_layer(self, a, out_,
+         z, a_prev, w, b, activation_prime):
+        delta_b = np.zeros((a.shape[0], ) + b.shape)
+        delta_w = np.zeros((a.shape[0], ) + w.shape)
+
+        #a.shape[0] is the batch size
+        for m in range(a.shape[0]):
+            delta = self.cost_derivative(a[m], out_[m]) \
+                    * activation_prime(z[m])
+            delta_b[m] = delta
+            delta_w[m] = np.dot(delta, a_prev[m].T)
+        return delta_b, delta_w
+
 
     def fully_connected_forward(self, in_, W, b, act_func):
         input_batch_size = in_.shape[0]
         out_ = np.ones((input_batch_size, W.shape[0], 1))
+        Zs   = np.ones((input_batch_size, W.shape[0], 1))
         for m in range(input_batch_size):
-            out_[m] = act_func(np.dot(W, in_[m]) + b)
+            Z = np.dot(W, in_[m]) + b
+            Zs[m] = Z
+            out_[m] = act_func(Z)
 
-        return out_
+        return out_, Zs
 
 
     def zero_pad(self,X, pad):

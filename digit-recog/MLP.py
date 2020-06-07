@@ -63,6 +63,7 @@ class MLP:
                * sigmoid_prime_vect(z[-l]) 
             delta_b[-l] = delta
             delta_w[-l] = np.dot(delta, a[-l-1].T)
+            print(delta_w[-l].shape)
             
         return (delta_w, delta_b)
 

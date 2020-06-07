@@ -94,20 +94,23 @@ if __name__ == "__main__":
     train_dataset, train_labels, test_dataset = get_datasets()
     train = [(x,y) for x,y in zip(train_dataset, train_labels)]
 
-    # mlp = MLP([784, 30, 10])
-    # mlp.feedforward(train_dataset[0])
-    # # mlp.SGD(train, 30, alpha=0.1, batch_size=10)
+    # mlp = MLP([784, 120, 84, 10])
+    
+    # mlp.SGD(train, 30, alpha=0.1, batch_size=10)
 
     cnn_model = CNN(
         [('conv', 5, 6, 2, 1, 'sigmoid'),
         ('pool', 'average', 2, 2),
         ('conv', 5, 16, 0, 1, 'sigmoid'),
         ('pool', 'average', 2, 2),
-        ('fully-conected', 120, 'sigmoid'),
-        ('fully-conected', 84, 'sigmoid'),
-        ('fully-conected', 10, 'sigmoid')]
+        ('fully-connected', 120, 'sigmoid'),
+        ('fully-connected', 84, 'sigmoid'),
+        ('fully-connected', 10, 'sigmoid')]
         , (28,28,1)
     )
 
-    in_ = train_dataset[0].reshape((1,28,28,1))
-    cnn_model.feedforward(in_)
+    in_ = train_dataset[:10].reshape((10,28,28,1))
+    out_ = train_labels[:10].reshape((10,10,1))
+    
+    cnn_model.backpropagation(in_, out_)
+    
