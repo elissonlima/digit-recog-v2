@@ -92,8 +92,8 @@ def get_datasets():
 if __name__ == "__main__":
     logging.info("STARTING digit-recog model")
     train_dataset, train_labels, test_dataset = get_datasets()
-    train = [(x,y) for x,y in zip(train_dataset, train_labels)]
-
+    train_dataset = train_dataset.reshape((train_dataset.shape[0], 28,28,1))
+    train_labels = train_labels.reshape((train_dataset.shape[0], 10,1))
     # mlp = MLP([784, 120, 84, 10])
     
     # mlp.SGD(train, 30, alpha=0.1, batch_size=10)
@@ -109,8 +109,5 @@ if __name__ == "__main__":
         , (28,28,1)
     )
 
-    in_ = train_dataset[:10].reshape((10,28,28,1))
-    out_ = train_labels[:10].reshape((10,10,1))
-    
-    cnn_model.backpropagation(in_, out_)
+    cnn_model.SGD(train_dataset, train_labels, 30, 3.)
     

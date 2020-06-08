@@ -1,4 +1,6 @@
 import numpy as np
+import random
+import logging
 from mlp import MLP
 
 def sigmoid(x):
@@ -36,10 +38,8 @@ class CNN(object):
                        layer_spec[i][2]) #Filter Num
                 l_spec["b"] = np.random.randn(1,1,1,
                         layer_spec[i][2])
-                l_spec["activation"] = np.vectorize(
-                        globals()[layer_spec[i][5]])
-                l_spec["activation_prime"] = np.vectorize(
-                    globals()[layer_spec[i][5]+"_prime"] )
+                l_spec["activation"] = globals()[layer_spec[i][5]]
+                l_spec["activation_prime"] = globals()[layer_spec[i][5]+"_prime"]
                 l_spec["hparameters"] = {
                     "stride" : layer_spec[i][4],
                     "pad" : layer_spec[i][3]
@@ -77,10 +77,8 @@ class CNN(object):
                 l_spec["input_size"] = np.prod(
                     self.layers[i - 1]["out_size"])
                 l_spec["out_size"] = layer_spec[i][1]
-                l_spec["activation"] = np.vectorize(
-                        globals()[layer_spec[i][2]])
-                l_spec["activation_prime"] = np.vectorize(
-                    globals()[layer_spec[i][2]+"_prime"] )
+                l_spec["activation"] = globals()[layer_spec[i][2]]
+                l_spec["activation_prime"] = globals()[layer_spec[i][2]+"_prime"]
                 l_spec["W"] = np.random.randn(l_spec["out_size"],
                              l_spec["input_size"])
                 l_spec["b"] = np.random.randn(l_spec["out_size"], 1)
@@ -130,6 +128,7 @@ class CNN(object):
                 conv_f = self.conv_forward(in_,W,b,hparam)
 
                 Z = conv_f[0]
+
                 in_ = layer['activation'](Z)
                 zs.append(Z)
                 activations.append(in_)
@@ -155,6 +154,7 @@ class CNN(object):
 
         nabla_b = [None for _ in range(len(self.layers))]
         nabla_w = [None for _ in range(len(self.layers))]
+        da_prev = None
 
         for i in range(len(self.layers) - 1, -1, -1):
             layer = self.layers[i]
@@ -185,10 +185,47 @@ class CNN(object):
                         )
                     nabla_b[i] = delta_b
                     nabla_w[i] = delta_w
+            elif layer["type"] == "pool":
+                da_prev = self.pool_backward(activations[i+1],
+                    caches[i], mode=layer["mode"])
+                nabla_b[i] = np.array([])
+                nabla_w[i] = np.array([])
+            elif layer["type"] == "conv":
+                da_prev, dw, db = self.conv_backward(da_prev, caches[i])
+                nabla_w[i] = dw
+                nabla_b[i] = db
 
-        print(nabla_b[-1].shape, nabla_w[-1].shape)
-        print(nabla_b[-2].shape, nabla_w[-2].shape)
-        print(nabla_b[-3].shape, nabla_w[-3].shape)
+        return nabla_b, nabla_w
+
+    def SGD(self, train, labels, epochs, alpha, batch_size=10):
+
+        for epoch_n in range(epochs):
+            logging.info("Epoch {}: Started".format(epoch_n+1))
+            random.shuffle(train)
+            for idx in range(batch_size,len(train),batch_size):
+                x = train[idx-batch_size:idx]
+                y = labels[idx-batch_size:idx]
+                nabla_b, nabla_w  = self.backpropagation(x, y)
+                learning_rate = alpha / batch_size 
+                ##Update Weights
+                for i in range(len(self.layers)):
+                    if self.layers[i]["type"] == "fully-connected":
+                        for m in range(batch_size):
+                            self.layers[i]["W"] -= learning_rate * nabla_w[i][m]
+                            self.layers[i]["b"] -= learning_rate * nabla_b[i][m]
+                    elif self.layers[i]["type"] == "conv":
+                        self.layers[i]["W"] -= learning_rate * nabla_w[i]
+                        self.layers[i]["b"] -= learning_rate * nabla_b[i]
+            
+            acc = self.evaluate(train, labels)
+            logging.info("Epoch {}: Finished - Accuracy {}"
+                .format(epoch_n+1, acc))
+
+    def evaluate(self, train, labels):
+        test_results = [(np.argmax(self.feedforward(x)), 
+                         np.argmax(y))
+                        for x, y in zip(train, labels)]
+        return sum(int(x == y) for x, y in test_results) / len(train)
 
     def cost_derivative(self, a, y):
         return a - y
@@ -330,7 +367,7 @@ class CNN(object):
                         
                         # Use the corners to define the (3D) slice of a_prev_pad (See Hint above the cell). (≈1 line)
                         a_slice_prev = a_prev_pad[vert_start:vert_end, horiz_start:horiz_end,:]
-                        #print(a_slice_prev.shape)
+                        
                         # Convolve the (3D) slice with the correct filter W and bias b, to get back one output neuron. (≈1 line)
                         Z[i, h, w, c] = self.conv_single_step(a_slice_prev, W[...,c], b[...,c])
                                             
@@ -436,6 +473,9 @@ class CNN(object):
         # Retrieve information from "hparameters"
         stride = hparameters['stride']
         pad = hparameters['pad']
+        if pad == 0:
+            pad = 1
+        #print("PAD", pad)
         
         # Retrieve dimensions from dZ's shape
         (m, n_H, n_W, n_C) = dZ.shape
@@ -553,7 +593,6 @@ class CNN(object):
         
         # Initialize dA_prev with zeros (≈1 line)
         dA_prev = np.zeros(A_prev.shape)
-        
         for i in range(m):                       # loop over the training examples
             
             # select training example from A_prev (≈1 line)
@@ -583,9 +622,11 @@ class CNN(object):
                             
                             # Get the value a from dA (≈1 line)
                             da = dA[i, h, w, c]
+                            
                             # Define the shape of the filter as fxf (≈1 line)
                             shape = (f, f)
                             # Distribute it to get the correct slice of dA_prev. i.e. Add the distributed value of da. (≈1 line)
+                            
                             dA_prev[i, vert_start: vert_end, horiz_start: horiz_end, c] += self.distribute_value(da, shape)
                             
         ### END CODE ###
